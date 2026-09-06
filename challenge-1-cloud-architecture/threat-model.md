@@ -33,36 +33,41 @@ La probabilidad se puntúa sobre la **arquitectura propuesta en el enunciado** (
 
 ```mermaid
 flowchart LR
-    subgraph tb1[" "]
+    subgraph tb1["INTERNET — zona no confiable"]
         direction TB
         cliente["Cliente<br/>web / móvil"]
     end
 
-    subgraph tb2[" "]
+    subgraph tb7["CI/CD — privilegio sobre la cuenta"]
+        direction TB
+        cicd["GitHub Actions<br/>IaC"]
+    end
+
+    subgraph tb2["EDGE — primer filtro"]
         direction TB
         edge["CloudFront + WAF<br/>API Gateway<br/>+ Authorizer JWT"]
     end
 
-    subgraph tb3[" "]
+    subgraph tb3["APLICACIÓN — VPC privada"]
+        direction TB
+        lambda["Lambda<br/>procesado y consulta"]
+    end
+
+    subgraph tb4["DATOS — cifrado con CMK"]
         direction TB
         s3[("S3<br/>documentos")]
-        lambda["Lambda<br/>procesado"]
         ddb[("DynamoDB<br/>resultados")]
     end
 
-    subgraph tb4[" "]
+    subgraph tb5["IA — límite de confianza propio"]
         direction TB
         bedrock["Amazon<br/>Bedrock"]
     end
 
-    subgraph tb5[" "]
+    subgraph tb6["RED INTERNA — requisito 5"]
         direction TB
+        privapi["API privada<br/>autorización IAM"]
         interno["Servicio<br/>interno"]
-    end
-
-    subgraph tb6[" "]
-        direction TB
-        cicd["GitHub Actions<br/>IaC"]
     end
 
     cliente -->|"① Internet → Edge<br/>token no confiable"| edge
@@ -72,16 +77,23 @@ flowchart LR
     lambda -->|"④ Aplicación → IA<br/>doc. no confiable<br/>como prompt"| bedrock
     bedrock -->|"⑤ IA → Aplicación<br/>salida no confiable"| lambda
     lambda --> ddb
-    ddb -->|"⑥ Datos → Consumidor<br/>PII cruzando<br/>hacia otro dominio"| interno
+    ddb --> lambda
+    lambda -->|"⑥ Datos → Consumidor<br/>PII cruzando<br/>hacia otro dominio"| privapi
+    privapi --> interno
     cicd -->|"⑦ CI/CD → Cuenta AWS<br/>privilegio de despliegue"| s3
     cicd --> lambda
 
+    lambda -.-> edge
+    edge -.->|"lectura de resultados:<br/>la vuelta recruza ③ y ①<br/>(BOLA / IDOR)"| cliente
+
     classDef tb fill:none,stroke:#e05252,stroke-width:2px,stroke-dasharray:6 4
 
-    class tb1,tb2,tb3,tb4,tb5,tb6 tb
+    class tb1,tb2,tb3,tb4,tb5,tb6,tb7 tb
 ```
 
-Cada recuadro punteado es una zona de confianza. Las siete flechas numeradas son los límites que se cruzan, y es sobre ellos donde se aplica STRIDE. Los dos límites que la arquitectura original no trataba como tales son el ④/⑤ (el modelo de IA es una frontera de confianza en sí mismo) y el ⑦ (el pipeline tiene privilegio sobre la cuenta).
+Cada recuadro punteado es una zona de confianza, y lleva el mismo nombre que en el [diagrama de arquitectura](./README.md#2-diagrama-de-arquitectura). Las siete flechas numeradas son los límites que se cruzan, y es sobre ellos donde se aplica STRIDE. Los dos límites que la arquitectura original no trataba como tales son el ④/⑤ (el modelo de IA es una frontera de confianza en sí mismo) y el ⑦ (el pipeline tiene privilegio sobre la cuenta).
+
+La flecha discontinua de vuelta al cliente es la **lectura** de resultados. No estrena límite: recruza el ③ y el ① en sentido inverso, y por eso la amenaza #1 se sitúa ahí. Se dibuja porque el flujo de mayor riesgo del modelo es una lectura, no una escritura, y sin él el diagrama solo contaría la mitad de la historia.
 
 ---
 
