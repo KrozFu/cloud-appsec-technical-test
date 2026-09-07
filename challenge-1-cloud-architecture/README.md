@@ -30,7 +30,7 @@ Tres decisiones condicionan todo el diseño:
 | GuardDuty (con S3 Malware Protection) | Detección de comportamiento anómalo y análisis antimalware de los objetos subidos antes de procesarlos. |
 | AWS Config + Security Hub | La infraestructura es IaC, pero la deriva ocurre igual. Detectan un bucket que deja de estar cifrado o un SG que se abre. |
 | VPC + VPC endpoints | Ver decisión 2. Sin VPC, una Lambda comprometida tiene salida directa a Internet. |
-| Emisor de identidad (OIDC) | El enunciado da el JWT por hecho pero no dice quién lo emite. Sin emisor definido no hay `iss` que validar, ni JWKS contra el que verificar la firma, ni rotación de claves. Se representa sin producto concreto: ver [§5](#5-qué-queda-pendiente-de-acordar). |
+| Emisor de identidad (OIDC) | El enunciado da el JWT por hecho pero no dice quién lo emite. Sin emisor definido no hay `iss` que validar, ni JWKS contra el que verificar la firma, ni rotación de claves. Se representa sin producto concreto: ver [§5](#5-supuestos-declarados-y-preguntas-para-producto). |
 
 ---
 
@@ -168,13 +168,17 @@ El enunciado habla de *"aplicación web y móvil"*. El binario de una app móvil
 
 ---
 
-## 5. Qué queda pendiente de acordar
+## 5. Supuestos declarados y preguntas para Producto
 
-Un diseño honesto declara lo que no puede decidir por su cuenta:
+**El diseño está completo.** Lo que sigue no son tareas pendientes, sino las entradas que esta revisión no puede decidir por su cuenta porque son de negocio, legales u organizativas. Cada una lleva **el supuesto con el que se ha trabajado mientras tanto**, para que nada quede bloqueado: si la respuesta llega y coincide, no hay que cambiar nada; si difiere, se indica qué se revisa.
 
-- **Qué emite los JWT.** El enunciado dice que la aplicación *usa* JWT, no quién los firma. Si ya existe una plataforma de identidad corporativa, el diseño federa con ella; si no, Amazon Cognito es la opción de menor fricción. El diseño no depende de esa elección: solo asume que el emisor publica JWKS, rota sus claves de firma y emite `iss` y `aud` verificables.
-- **El plazo de retención del documento original y de los resultados.** El enunciado dice "un periodo determinado" sin fijarlo. Es una decisión de negocio y de base legal, no técnica.
-- **Multi-tenancy.** Si un mismo cliente corporativo agrupa a varios usuarios, hace falta un modelo de autorización jerárquico que aquí solo se cubre a nivel de propiedad del documento.
-- **Residencia de los datos y región de Bedrock.** Determina qué modelos hay disponibles y qué marco regulatorio aplica al tratamiento.
-- **Si el resultado se muestra a un cliente final.** Cambia la severidad de LLM02/LLM09: la salida del modelo pasaría a alcanzar un navegador.
-- **Volumen esperado.** Condiciona los umbrales de throttling, la concurrencia reservada y si el DoS económico es una amenaza real o teórica.
+Declararlas es parte del entregable. Un *threat model* que no dice qué asumió no se puede auditar — es el mismo principio por el que el agente del [Reto 2](../challenge-2-ai-security-agent/) emite `assumptions` y `out_of_scope` en cada análisis.
+
+| Pregunta | Por qué no la decide seguridad | Supuesto de trabajo | Si la respuesta difiere |
+| --- | --- | --- | --- |
+| **Qué emite los JWT** | Depende de si ya existe una plataforma de identidad corporativa | El emisor publica JWKS, rota sus claves de firma y emite `iss` y `aud` verificables. Sin plataforma previa, Amazon Cognito es la opción de menor fricción | Nada del diseño cambia: el authorizer verifica contra JWKS sea cual sea el producto |
+| **Plazo de retención** del documento y de los resultados | Base legal del tratamiento y decisión de negocio | Existe un plazo y la regla de ciclo de vida de S3 lo aplica; el TTL de DynamoDB queda listo para configurarse | Solo cambia el valor del plazo, no el control (§3.4) |
+| **Multi-tenancy** | Modelo comercial: si un cliente corporativo agrupa a varios usuarios | Cada documento tiene un único propietario y la autorización se resuelve a ese nivel | Hace falta un modelo de autorización jerárquico; afecta a la amenaza de mayor riesgo (BOLA) |
+| **Residencia de los datos y región de Bedrock** | Marco regulatorio aplicable | Región única, con el modelo fijado explícitamente y sin salida del dato de esa región | Puede condicionar qué modelos hay disponibles y obligar a revisar el tratamiento |
+| **Si el resultado se muestra a un cliente final** | Alcance funcional, lo define Producto | El consumidor es interno (requisito 5) y la salida no alcanza un navegador | Sube la severidad de LLM02/LLM09 y exige codificación de salida en el consumidor |
+| **Volumen esperado** | Previsión de negocio | Volumen moderado; los umbrales de *throttling* y la concurrencia reservada se calibran tras medir | Cambian los umbrales, no los controles. Determina si el DoS económico (#7) es real o teórico |
