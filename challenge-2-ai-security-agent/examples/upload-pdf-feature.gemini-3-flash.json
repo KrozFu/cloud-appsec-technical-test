@@ -1,0 +1,95 @@
+{
+  "system_summary": "La funcionalidad permite a usuarios móviles subir documentos PDF a S3 a través de una API Gateway protegida por JWT. Un proceso Lambda extrae información de estos archivos utilizando Amazon Bedrock y guarda los resultados estructurados en una base de datos DynamoDB.",
+  "assets": [
+    "Contenido de los documentos PDF (posible PII o datos sensibles del cliente)",
+    "Metadatos extraídos en DynamoDB",
+    "Disponibilidad del servicio de extracción (Bedrock)",
+    "Créditos/Presupuesto de consumo de modelos de IA",
+    "Integridad del sistema de procesamiento (Lambda)"
+  ],
+  "trust_boundaries": [
+    "Aplicación móvil -> API Gateway (Internet pública a entorno AWS)",
+    "API Gateway -> S3 (Ingreso de datos de usuario a almacenamiento)",
+    "S3 -> Lambda (Evento de procesamiento)",
+    "Lambda -> Amazon Bedrock (Frontera de servicio de IA)"
+  ],
+  "threats": [
+    {
+      "component": "API Gateway / DynamoDB",
+      "threat": "Un usuario autenticado con un JWT válido intenta acceder o modificar datos de extracción de otros usuarios manipulando identificadores en las peticiones (Broken Object Level Authorization - BOLA).",
+      "stride": "I",
+      "impact": 4,
+      "likelihood": 4,
+      "impact_rationale": "Fuga de información sensible (PII) de otros clientes, lo que supone un incumplimiento de privacidad y daño reputacional.",
+      "likelihood_rationale": "Es un vector de ataque común en APIs donde la autorización se limita a validar el token pero no la propiedad del recurso solicitado.",
+      "control": "Validar en la lógica de la Lambda o mediante políticas de IAM dinámicas que el 'sub' del JWT coincide con el propietario del registro en DynamoDB.",
+      "residual_risk_note": "Requiere que el JWT contenga de forma íntegra el identificador de usuario y que este no pueda ser suplantado.",
+      "risk": 16,
+      "severity": "Alto"
+    },
+    {
+      "component": "Lambda -> Bedrock",
+      "threat": "Un atacante sube un PDF con texto diseñado específicamente para confundir al modelo de lenguaje (Prompt Injection), ordenándole ignorar las instrucciones de extracción y revelar información del sistema o realizar acciones no previstas.",
+      "stride": "T",
+      "impact": 3,
+      "likelihood": 4,
+      "impact_rationale": "Los datos extraídos podrían ser erróneos, maliciosos o causar que la Lambda procese información de forma inesperada, afectando la integridad de la base de datos.",
+      "likelihood_rationale": "Las técnicas de Prompt Injection son sencillas de ejecutar si el contenido del documento se concatena directamente con las instrucciones del sistema.",
+      "control": "Uso de Amazon Bedrock Guardrails para filtrar contenido malicioso y una clara delimitación entre las instrucciones del sistema y el contenido del PDF en el prompt.",
+      "residual_risk_note": "Las técnicas de jailbreak en LLMs evolucionan constantemente; no existe una mitigación 100% efectiva.",
+      "risk": 12,
+      "severity": "Alto"
+    },
+    {
+      "component": "API Gateway / S3",
+      "threat": "Un atacante sube archivos masivos o de gran tamaño repetidamente para agotar la cuota de almacenamiento, saturar la Lambda de procesamiento o elevar los costes de invocación de Bedrock desmesuradamente.",
+      "stride": "D",
+      "impact": 3,
+      "likelihood": 4,
+      "impact_rationale": "Agotamiento de presupuesto y posible denegación de servicio para usuarios legítimos debido a límites de concurrencia en Lambda o cuotas de Bedrock.",
+      "likelihood_rationale": "Sin límites de tamaño de archivo o rate limiting por usuario, es trivial automatizar la subida de archivos.",
+      "control": "Implementar Throttling y Usage Plans en API Gateway, validar el Content-Length antes de permitir la subida a S3 y limitar el tamaño máximo procesable por la Lambda.",
+      "residual_risk_note": "Aun con límites, un ataque distribuido desde múltiples cuentas válidas podría generar costes significativos.",
+      "risk": 12,
+      "severity": "Alto"
+    },
+    {
+      "component": "S3 Bucket de documentos",
+      "threat": "Exposición accidental de los documentos PDF a Internet debido a una configuración permisiva del bucket o falta de controles de acceso específicos.",
+      "stride": "I",
+      "impact": 5,
+      "likelihood": 2,
+      "impact_rationale": "Fuga masiva de documentos originales de clientes, lo que podría incluir datos altamente confidenciales.",
+      "likelihood_rationale": "AWS aplica 'Block Public Access' por defecto, pero configuraciones manuales erróneas o políticas de IAM demasiado abiertas siguen ocurriendo.",
+      "control": "Habilitar S3 Block Public Access a nivel de cuenta/bucket y usar una Bucket Policy que solo permita acceso al rol de la Lambda y al servicio de subida mediante SSL.",
+      "residual_risk_note": "Se asume que no se requieren URLs prefirmadas para acceso público de larga duración.",
+      "risk": 10,
+      "severity": "Medio"
+    },
+    {
+      "component": "Lambda -> S3 / DynamoDB",
+      "threat": "La función Lambda utiliza un rol de IAM con permisos excesivos (p.ej. s3:* o dynamodb:*), permitiendo que si el código es comprometido, un atacante pueda leer o borrar todos los datos de la cuenta.",
+      "stride": "E",
+      "impact": 4,
+      "likelihood": 2,
+      "impact_rationale": "Pérdida total de integridad y confidencialidad en el almacenamiento de la aplicación si el entorno de ejecución se ve comprometido.",
+      "likelihood_rationale": "Requiere una vulnerabilidad previa en la Lambda o sus dependencias para ser explotado, pero es un fallo de configuración muy común.",
+      "control": "Aplicar el principio de mínimo privilegio asignando políticas que limiten el acceso únicamente a los buckets y tablas específicos necesarios para esta funcionalidad.",
+      "residual_risk_note": "La gestión de identidades sigue dependiendo de la correcta administración de los roles por parte de los desarrolladores.",
+      "risk": 8,
+      "severity": "Medio"
+    }
+  ],
+  "assumptions": [
+    "Se asume que el JWT es validado por API Gateway (Lambda Authorizer o Cognito Authorizer) antes de llegar a la lógica de negocio.",
+    "Se asume que la comunicación entre la aplicación móvil y AWS se realiza íntegramente sobre HTTPS/TLS 1.2+.",
+    "Se asume que la Lambda se dispara automáticamente mediante un evento S3 ObjectCreated.",
+    "Se asume que el identificador de usuario (owner ID) está presente en las demandas (claims) del JWT."
+  ],
+  "out_of_scope": [
+    "Seguridad del dispositivo móvil del cliente y almacenamiento local de documentos.",
+    "Proceso de generación, rotación y revocación de los tokens JWT.",
+    "Protección de red a nivel de infraestructura (VPC Endpoints, WAF), ya que no se mencionan detalles de red.",
+    "Análisis de malware de los archivos PDF subidos (se recomienda integrar un escáner)."
+  ]
+}
