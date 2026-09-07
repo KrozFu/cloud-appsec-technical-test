@@ -1,0 +1,5 @@
+Estamos creando una funcionalidad para permitir que clientes suban documentos PDF desde la aplicación móvil.
+Los documentos se almacenan en S3.
+Una Lambda procesa el archivo y utiliza Amazon Bedrock para extraer algunos datos.
+Los resultados se almacenan en DynamoDB.
+La aplicación utiliza JWT para autenticación y API Gateway como entrada de las APIs.

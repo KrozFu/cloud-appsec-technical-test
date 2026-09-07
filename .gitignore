@@ -9,7 +9,7 @@ build/
 .pytest_cache/
 .ruff_cache/
 
-# Secretos y entorno — nunca en el repositorio
+# Secrets and environment — never in the repository
 .env
 .env.*
 !.env.example
@@ -17,7 +17,7 @@ build/
 *.key
 credentials
 
-# Herramientas y sistema
+# Tools and system
 .DS_Store
 .idea/
 .vscode/
