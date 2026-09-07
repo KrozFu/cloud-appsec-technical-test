@@ -2,7 +2,7 @@
 
 Dos retos independientes: una revisión de seguridad sobre una arquitectura AWS, y un agente de IA que asiste al equipo de Ciberseguridad durante el Secure SDLC.
 
-Ambos comparten el mismo caso: la carga de documentos desde una aplicación móvil, su procesamiento con Amazon Bedrock y el almacenamiento de los resultados. Eso permite algo que ninguno de los dos consigue por separado: **contrastar el modelo de amenazas que escribe una persona con el que genera el agente sobre el mismo sistema.** Coinciden en las dos amenazas principales; el [contraste completo](./challenge-2-ai-security-agent/README.md#contraste-con-el-threat-model-manual) está en el Reto 2.
+Ambos comparten el mismo caso: la carga de documentos desde una aplicación móvil, su procesamiento con Amazon Bedrock y el almacenamiento de los resultados. Eso permite algo que ninguno de los dos consigue por separado: **contrastar el modelo de amenazas que escribe una persona con el que genera el agente sobre el mismo sistema.** Coinciden en la amenaza principal y en la *prompt injection* a través del documento; el [contraste completo, con sus limitaciones](./challenge-2-ai-security-agent/README.md#contraste-con-el-threat-model-manual), está en el Reto 2.
 
 Todo está en español. Los documentos se leen sin ejecutar nada: los diagramas y los resultados del agente están versionados.
 
