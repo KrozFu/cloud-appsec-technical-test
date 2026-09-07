@@ -84,10 +84,10 @@ def build_provider(
         opciones = ", ".join(sorted(PRESETS))
         raise ProviderError(f"Proveedor desconocido: '{name}'. Opciones: {opciones}.")
 
-    # THREAT_AGENT_MODEL y THREAT_AGENT_BASE_URL describen el proveedor activo del
-    # `.env`. Si se pide otro con --provider, no se heredan: un modelo o una URL
-    # del proveedor equivocado producen un 404, o peor, mandan la clave de un
-    # proveedor al endpoint de otro y el error resultante habla de credenciales.
+    # THREAT_AGENT_MODEL y THREAT_AGENT_BASE_URL describen el proveedor activo del `.env`. Si se
+    # pide otro con --provider, no se heredan: un modelo o una URL
+    # del proveedor equivocado producen un 404, o peor, mandan la clave de un proveedor al
+    # endpoint de otro y el error resultante habla de credenciales.
     is_env_provider = env_provider is None or name == env_provider.lower()
     env_model = os.environ.get("THREAT_AGENT_MODEL") if is_env_provider else None
 

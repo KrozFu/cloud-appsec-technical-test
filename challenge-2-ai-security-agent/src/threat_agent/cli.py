@@ -35,8 +35,7 @@ def _read_description(source: str) -> str:
 def _emit(tm: ThreatModel, json_out: Path | None, md_out: Path | None) -> None:
     if json_out:
         payload = tm.model_dump(mode="json")
-        # El riesgo es derivado; se materializa en el JSON para que sea consumible
-        # por otras herramientas sin reimplementar el cálculo.
+        # El riesgo es derivado; se materializa en el JSON para que sea consumible por otras herramientas sin reimplementar el cálculo.
         payload["threats"] = [
             {**t.model_dump(mode="json"), "risk": t.risk, "severity": t.severity.value}
             for t in tm.ranked_threats()
@@ -62,8 +61,10 @@ def analyze_feature(
     ] = None,
     provider: Annotated[
         str | None,
-        typer.Option(help="Proveedor: anthropic, bedrock, openai, openrouter, gemini... "
-                          "Por defecto, THREAT_AGENT_PROVIDER del .env."),
+        typer.Option(
+            help="Proveedor: anthropic, bedrock, openai, openrouter, gemini... "
+            "Por defecto, THREAT_AGENT_PROVIDER del .env."
+        ),
     ] = None,
     model: Annotated[
         str | None, typer.Option(help="Modelo. Por defecto, el del proveedor elegido.")
@@ -81,9 +82,7 @@ def analyze_feature(
 
     try:
         with console.status("Analizando la funcionalidad..."):
-            result = analyze(
-                description, provider_name=provider, model=model, effort=effort
-            )
+            result = analyze(description, provider_name=provider, model=model, effort=effort)
     except EmptyDescriptionError as exc:
         err_console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=2) from exc
