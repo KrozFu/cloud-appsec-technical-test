@@ -163,16 +163,30 @@ Dos consecuencias prácticas, iguales en ambas rutas: el mínimo de **5 amenazas
 cp .env.example .env      # y rellena solo el proveedor que vayas a usar
 ```
 
-| `THREAT_AGENT_PROVIDER` | Cubre |
-| --- | --- |
-| `anthropic` *(por defecto)* | API de Anthropic |
-| `bedrock` | Amazon Bedrock: sin clave propia, autentica con credenciales de AWS |
-| `openai` · `openrouter` · `gemini` | Sus APIs respectivas |
-| `openai-compatible` | NVIDIA NIM, Groq, Together, vLLM, Ollama local… |
+| `THREAT_AGENT_PROVIDER` | Clave | Modelo por defecto |
+| --- | --- | --- |
+| `anthropic` *(por defecto)* | `ANTHROPIC_API_KEY` | `claude-opus-5` |
+| `bedrock` | Credenciales de AWS + `AWS_REGION` | `anthropic.claude-opus-5` |
+| `openai` | `OPENAI_API_KEY` | `gpt-5` |
+| `openrouter` | `OPENROUTER_API_KEY` | `anthropic/claude-opus-4.1` |
+| `gemini` | `GEMINI_API_KEY` | `gemini-3.1-pro-preview` |
+| `openai-compatible` | `THREAT_AGENT_API_KEY` + `THREAT_AGENT_BASE_URL` | Ninguno: hay que fijarlo |
+
+**Dónde vive el `.env` y cómo se carga.** Va junto a `pyproject.toml`, en la raíz del paquete, y se busca **por ruta relativa al directorio desde el que se ejecuta el comando**. Hay que lanzar el agente desde `challenge-2-ai-security-agent/`; desde otro sitio el fichero no se encuentra y **se ignora en silencio**, con lo que el agente cae al proveedor por defecto y falla más tarde con un error de credenciales aunque el `.env` sea correcto. Ante un error de clave, comprobar primero el directorio.
+
+Precedencia, de más fuerte a más débil: banderas del CLI (`--provider`, `--model`) → variables del entorno → `.env`. Que el entorno gane al fichero es deliberado, para sobrescribir en CI sin editarlo. Y dentro del fichero cada variable se define una sola vez: si aparece repetida gana la primera y la segunda se descarta sin avisar.
+
+`THREAT_AGENT_MODEL` y `THREAT_AGENT_BASE_URL` describen al proveedor de `THREAT_AGENT_PROVIDER` y **no se heredan** si se pide otro con `--provider`: mandar la clave de un proveedor al endpoint de otro produce un error que habla de credenciales y manda a buscar el problema donde no está.
 
 **Solo hay dos adaptadores, no uno por fabricante.** OpenAI, OpenRouter y Gemini hablan el protocolo de OpenAI, así que se cubren con uno que cambia de `base_url`; el otro cubre Anthropic y Bedrock. Añadir un proveedor suele ser una entrada en `PRESETS`, no un módulo. Los paquetes de los compatibles con OpenAI son un extra opcional (`uv sync --extra openai`).
 
 Cada preset trae su `base_url` y su modelo. `--provider` y `--model` ganan al `.env`, y el entorno gana al fichero para poder sobrescribir en CI. `.env` está en `.gitignore` y nunca se commitea; `.env.example` documenta todas las variables.
+
+### Elegir modelo: avisos comprobados contra las APIs
+
+- **Los identificadores caducan.** Toda la familia `gemini-2.5` devuelve 404 para cuentas nuevas. Los modelos *pro* de Google tienen cuota 0 en el *free tier* y responden 429: con clave gratuita hay que pasar `--model gemini-3-flash-preview`.
+- **OpenRouter depende del modelo al que enrute.** No todos soportan JSON Schema estricto.
+- **Ejemplo verificado de `openai-compatible`**, con el catálogo de NVIDIA (`https://integrate.api.nvidia.com/v1`): `moonshotai/kimi-k3` funciona; `deepseek-ai/deepseek-v4-pro` agota el *gateway* con un 504; `nvidia/nemotron-3-super` ignora el esquema. El catálogo es irregular y conviene comprobar el modelo antes de fiarse de él.
 
 ### Verificado, no supuesto
 
@@ -190,14 +204,16 @@ Sus coberturas STRIDE, en cambio, **no** coinciden: Gemini identifica *Elevation
 
 La descripción del enunciado es el mismo sistema que analiza a mano el [Reto 1](../challenge-1-cloud-architecture/threat-model.md). Eso permite contrastar el borrador del agente contra un modelo de amenazas escrito por una persona sobre la misma arquitectura:
 
-| | Threat model manual (Reto 1) | Agente (Reto 2) |
-| --- | --- | --- |
-| Amenaza nº 1 | IDOR en la consulta de resultados · riesgo 20 | **La misma** · riesgo 16, en los dos proveedores |
-| Amenaza nº 2 | Suplantación por JWT mal validado · riesgo 20 | **La misma** · riesgo 12 |
-| *Prompt injection* vía documento | Riesgo 16 | Detectada por ambos · riesgo 12 y 9 |
-| Total de amenazas | 11 | 7 y 5 |
+| Amenaza del análisis manual | Manual | Kimi K3 | Gemini 3 Flash |
+| --- | --- | --- | --- |
+| IDOR en la consulta de resultados | 20 | **16** (la nº 1) | **16** (la nº 1) |
+| Suplantación por JWT mal validado | 20 | **12** | *no la emite* |
+| *Prompt injection* vía el documento | 16 | **9** | **12** |
+| Total de amenazas | 11 | 7 | 5 |
 
-El agente reproduce las dos amenazas principales del análisis manual y detecta la *prompt injection* indirecta, que es la amenaza específica de IA de esta arquitectura. No es una comparación ciega —quien escribió el prompt de sistema es quien hizo el análisis manual—, pero sí muestra que el agente no se queda en generalidades: llega a los mismos escenarios concretos.
+**Los dos modelos llegan a la amenaza principal del análisis manual** —el IDOR— y la colocan también en primera posición, y los dos detectan la *prompt injection* indirecta, que es la amenaza específica de IA de esta arquitectura. La suplantación por JWT la emite solo Kimi; Gemini no produce ninguna amenaza de *Spoofing*.
+
+No es una comparación ciega —quien escribió el prompt de sistema es quien hizo el análisis manual—, pero sí muestra que el agente no se queda en generalidades: llega a los mismos escenarios concretos.
 
 Dos diferencias que conviene leer con atención, porque son el argumento de por qué esto asiste y no sustituye:
 
